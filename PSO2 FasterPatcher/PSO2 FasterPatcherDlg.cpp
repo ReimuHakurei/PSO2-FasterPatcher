@@ -74,7 +74,7 @@ char* strtolower(char* s) {
 }
 
 // This function generates a human-readable size from a number.
-char* genHumanReadableSize(uint64_t bytes) {
+static char* genHumanReadableSize(uint64_t bytes) {
 	char humanReadableSize[127];
 
 	if ((bytes / 1000) > 1000000) {
@@ -90,7 +90,7 @@ char* genHumanReadableSize(uint64_t bytes) {
 		sprintf(humanReadableSize, "%.0f bytes", (float)bytes);
 	}
 
-	// We're immediately strcpy()ing this, so this is perfectly safe. So we shut up the compiler warnings.
+	// Shut up, compiler. This is STATIC. 
 	#pragma warning( suppress : 4172 )
 	return humanReadableSize;
 }
