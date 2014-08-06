@@ -54,8 +54,6 @@ uint64_t downloadFile(CHttpConnection *pConnection, CString FilePath, char* file
 // THE POSSIBILITY OF SUCH DAMAGE.
 //
 char* strtoupper(char* s) {
-	assert(s != NULL);
-
 	char* p = s;
 	while (*p != '\0') {
 		*p = toupper(*p);
@@ -66,8 +64,6 @@ char* strtoupper(char* s) {
 }
 
 char* strtolower(char* s) {
-	assert(s != NULL);
-
 	char* p = s;
 	while (*p != '\0') {
 		*p = tolower(*p);
