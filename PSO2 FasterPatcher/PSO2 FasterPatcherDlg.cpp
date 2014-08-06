@@ -279,12 +279,12 @@ UINT startPatching(LPVOID pParam) {
 
 	FILE * patchList;
 
-	patchList = _wfopen(L"patchlist.txt", L"r");
+	patchList = _wfopen(L"patchlist.txt", L"w+");
 
 	char line[8192];
 	char output[8192];
 
-	/*uint64_t patchDownloadAmt;
+	uint64_t patchDownloadAmt;
 	// Time to download patch lists...
 	patchDownloadAmt = downloadFile(pConnection, L"/patch_prod/patches/launcherlist.txt", "patchlist1.txt", 1, 4, NULL, 0, L"patch list");
 	patchDownloadAmt = downloadFile(pConnection, L"/patch_prod/patches/patchlist.txt", "patchlist2.txt", 2, 4, NULL, patchDownloadAmt, L"patch list");
@@ -319,7 +319,7 @@ UINT startPatching(LPVOID pParam) {
 	}
 	fclose(mergeFiles);
 	_unlink("patchlist3.txt");
-	*/
+	
 	fseek(patchList, 0, SEEK_SET);
 
 	// This is a temporary file used to store the files needing to be downloaded.
@@ -425,7 +425,7 @@ UINT startPatching(LPVOID pParam) {
 	// Close file handle for patchlist, we're done with it.
 	fclose(patchList);
 	/// ...and delete it, since we're completely done with the entire file.
-	//_unlink("patchlist.txt");
+	_unlink("patchlist.txt");
 
 	// fseek() back to the start of our queue, we're re-using that file handle to do the patching part!
 	fseek(downloadList, 0, SEEK_SET);
@@ -545,8 +545,10 @@ uint64_t downloadFile(CHttpConnection *pConnection, CString FilePath, char* file
 					dataSinceLastSample += bytesRead;
 					// We only want to take samples every 500ms. Check if it has been at least 500ms since the last sample.
 					if ((GetTickCount64() - currSpeedCurrSampleTime >= 500)) {
-						// If it's been too long, we also don't want it!
-						if ((GetTickCount64() - currSpeedCurrSampleTime >= 600)) {
+						// If it's been too long, we also don't want it! We're prioritizing consistancy over accuracy here. 
+						// An ETA is completetely useless if it jumps between 45 minutes and 2 hours. So, here, we're ignoring
+						// periods during which the download stalls for a short period of time which would otherwise cause the speed indicator to tank.
+						if ((GetTickCount64() - currSpeedCurrSampleTime >= 550)) {
 							currSpeedLastSampleTime = currSpeedCurrSampleTime;
 							currSpeedCurrSampleTime = GetTickCount64();
 
