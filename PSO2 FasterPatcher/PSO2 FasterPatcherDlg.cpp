@@ -277,7 +277,14 @@ UINT startPatching(LPVOID pParam) {
 
 	m_progBar->SetMarquee(true,1000);
 
-	uint64_t patchDownloadAmt;
+	FILE * patchList;
+
+	patchList = _wfopen(L"patchlist.txt", L"r");
+
+	char line[8192];
+	char output[8192];
+
+	/*uint64_t patchDownloadAmt;
 	// Time to download patch lists...
 	patchDownloadAmt = downloadFile(pConnection, L"/patch_prod/patches/launcherlist.txt", "patchlist1.txt", 1, 4, NULL, 0, L"patch list");
 	patchDownloadAmt = downloadFile(pConnection, L"/patch_prod/patches/patchlist.txt", "patchlist2.txt", 2, 4, NULL, patchDownloadAmt, L"patch list");
@@ -288,12 +295,6 @@ UINT startPatching(LPVOID pParam) {
 	// line stores the current line when we're going through patchlist checking files. 
 	// However, due to 3 AM coding, for some reason it's trimming off data from this.
 	// So, as a workaround, we duplicate it before working on it.
-	char line[8192];
-	char output[8192];
-
-	FILE * patchList;
-	
-	patchList = _wfopen(L"patchlist.txt", L"w+");
 
 	FILE * mergeFiles;
 
@@ -318,7 +319,7 @@ UINT startPatching(LPVOID pParam) {
 	}
 	fclose(mergeFiles);
 	_unlink("patchlist3.txt");
-
+	*/
 	fseek(patchList, 0, SEEK_SET);
 
 	// This is a temporary file used to store the files needing to be downloaded.
@@ -423,6 +424,8 @@ UINT startPatching(LPVOID pParam) {
 
 	// Close file handle for patchlist, we're done with it.
 	fclose(patchList);
+	/// ...and delete it, since we're completely done with the entire file.
+	//_unlink("patchlist.txt");
 
 	// fseek() back to the start of our queue, we're re-using that file handle to do the patching part!
 	fseek(downloadList, 0, SEEK_SET);
@@ -494,6 +497,7 @@ uint64_t downloadFile(CHttpConnection *pConnection, CString FilePath, char* file
 
 	CString BottomText;
 	CString TopText;
+	CString ETA = L"";
 
 	pFile = pConnection->OpenRequest(CHttpConnection::HTTP_VERB_GET, FilePath, NULL, 1, NULL, L"1.1", INTERNET_FLAG_EXISTING_CONNECT | INTERNET_FLAG_RELOAD | INTERNET_FLAG_DONT_CACHE);
 	pFile->AddRequestHeaders(L"User-Agent: AQUA_HTTP\r\n", HTTP_ADDREQ_FLAG_ADD_IF_NEW);
@@ -514,7 +518,7 @@ uint64_t downloadFile(CHttpConnection *pConnection, CString FilePath, char* file
 		// The amount of data downloaded since the last sample.
 		int dataSinceLastSample = 0;
 		// We will take 8 samples, but we will display a speed estimate using however many are availiable.
-		int currSpeedSamples[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+		int currSpeedSamples[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 		// The index that should be used for the next sample.
 		uint64_t nextSampleIndex = 0;
 
@@ -541,33 +545,59 @@ uint64_t downloadFile(CHttpConnection *pConnection, CString FilePath, char* file
 					dataSinceLastSample += bytesRead;
 					// We only want to take samples every 500ms. Check if it has been at least 500ms since the last sample.
 					if ((GetTickCount64() - currSpeedCurrSampleTime >= 500)) {
-						// If it has been, we drop the current sample time back to last sample time and set the current one to the current time.
-						currSpeedLastSampleTime = currSpeedCurrSampleTime;
-						currSpeedCurrSampleTime = GetTickCount64();
+						// If it's been too long, we also don't want it!
+						if ((GetTickCount64() - currSpeedCurrSampleTime >= 600)) {
+							currSpeedLastSampleTime = currSpeedCurrSampleTime;
+							currSpeedCurrSampleTime = GetTickCount64();
 
-						// We get the time between samples as a floating-point number.
-						float timeBetweenSamples = (float)(currSpeedCurrSampleTime - currSpeedLastSampleTime) / 1000;
+							dataSinceLastSample = 0;
+						} else {
+							// If it has been, we drop the current sample time back to last sample time and set the current one to the current time.
+							currSpeedLastSampleTime = currSpeedCurrSampleTime;
+							currSpeedCurrSampleTime = GetTickCount64();
 
-						// Calculate the current speed sample.
-						currSpeedSamples[nextSampleIndex] = (int)((float)dataSinceLastSample / timeBetweenSamples);
+							// We get the time between samples as a floating-point number.
+							float timeBetweenSamples = (float)(currSpeedCurrSampleTime - currSpeedLastSampleTime) / 1000;
 
-						// Reset current speed back to zero, iterate through all samples, calculate average of all nonzero members.
-						currSpeed = 0;
-						int numValidSamples = 0;
-						for (int c = 0; c < 16; c++) {
-							if (currSpeedSamples[c]) {
-								currSpeed += currSpeedSamples[c];
-								numValidSamples++;
+							// Calculate the current speed sample.
+							currSpeedSamples[nextSampleIndex] = (int)((float)dataSinceLastSample / timeBetweenSamples);
+
+							int currSpeedTemp = 0;
+							int numValidSamples = 0;
+							for (int c = 0; c < 60; c++) {
+								if (currSpeedSamples[c]) {
+									currSpeedTemp += currSpeedSamples[c];
+									numValidSamples++;
+								}
 							}
-						}
-						currSpeed = currSpeed / numValidSamples;
+							currSpeed = (currSpeedTemp / numValidSamples);
 
-						// Let the sample pool overflow.
-						if (nextSampleIndex == 15) {
-							nextSampleIndex = 0;
-						}
+							// Let the sample pool overflow.
+							if (nextSampleIndex == 59) {
+								nextSampleIndex = 0;
+							}
 
-						dataSinceLastSample = 0;
+							dataSinceLastSample = 0;
+						}
+					}
+
+					if (currSpeed != 0 && totalDownload != NULL) {
+						ETA = L"";
+						uint64_t dataLeft = totalDownload - downloadedSoFar;
+						uint64_t secondsLeft = dataLeft / currSpeed;
+
+						uint64_t secs = secondsLeft % 60;
+						uint64_t mins = (secondsLeft / 60) % 60;
+						uint64_t hour = (secondsLeft / 3600) % 24;
+						uint64_t days = secondsLeft / 86400;
+
+						if (days > 0) ETA.Format(L"%s%dd ", ETA, days);
+
+						if (days > 0 || hour > 0) ETA.Format(L"%s%dh ", ETA, hour);
+
+						if (days > 0 || mins > 0 || hour > 0) ETA.Format(L"%s%dm ", ETA, mins);
+
+						ETA.Format(L"%s%ds remaining.", ETA, secs);
 					}
 
 					// Generate a human-readable value for how much has been downloaded. 
@@ -580,7 +610,11 @@ uint64_t downloadFile(CHttpConnection *pConnection, CString FilePath, char* file
 					}
 
 					// Update the interface.
-					TopText.Format(L"Downloading %s %d of %d.", downloadingWhat, currLine, filesToDownload);
+					if (ETA != L"") {
+						TopText.Format(L"Downloading %s %d of %d. %s", downloadingWhat, currLine, filesToDownload, ETA);
+					} else {
+						TopText.Format(L"Downloading %s %d of %d.", downloadingWhat, currLine, filesToDownload);
+					}
 					pwnd->SetDlgItemTextW(IDC_TEXT_TOP, TopText);
 					BottomText.Format(L"Downloaded %s of %s at %s/sec", CString(downHumanReadable), CString(sizeHumanReadable), CString(speedHumanReadable));
 					pwnd->SetDlgItemTextW(IDC_TEXT_BOTTOM, BottomText);
